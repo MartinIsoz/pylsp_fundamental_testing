@@ -1,0 +1,12 @@
+def get(case): return '\
+FoamFile\n\
+{\n\
+    version     2.0;\n\
+    format      ascii;\n\
+    class       uniformDimensionedVectorField;\n\
+    location    "constant";\n\
+    object      g;\n\
+}\n\
+\
+dimensions [0 1 -2 0 0 0 0];\n\
+value      ( 0 0 0 );'

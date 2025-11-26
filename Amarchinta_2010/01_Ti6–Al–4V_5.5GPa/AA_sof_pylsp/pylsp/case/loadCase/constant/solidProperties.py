@@ -1,0 +1,24 @@
+def get(case): 
+    if case.lsp.unstructuredApproach:
+        solver = 'myUnsLinearGeometry'
+    else:
+        solver = 'linearGeometryTotalDisplacement'
+
+    return '\
+FoamFile\n\
+{\n\
+    version     2.0;\n\
+    format      ascii;\n\
+    class       dictionary;\n\
+    location    "constant";\n\
+    object      solidProperties;\n\
+}\n\
+\n\
+solidModel ' + solver + ';\n\n' + solver + 'Coeffs\n\
+{\n\
+    infoFrequency   10;\n\
+    //nCorrectors     10000000;\n\
+    //solutionTolerance 1e-10;\n\
+    //alternativeTolerance 1e-10;\n\
+    //materialTolerance 1e-05;\n\
+}'

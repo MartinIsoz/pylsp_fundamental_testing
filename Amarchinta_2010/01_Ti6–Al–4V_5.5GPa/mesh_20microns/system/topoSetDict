@@ -1,0 +1,76 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// include mesh generation settings common for all the commands
+#include meshGenerationSettings
+
+// auxiliary calculations specific to topoSet
+
+// -- define dimensions for the zone of interest
+box_width_x #calc "$zone_of_interest_width_dp * $spot_size";            // zone of interest, X direction
+box_width_z #calc "$zone_of_interest_depth_dp * $spot_size";            // zone of interest, Z direction
+box_length #calc "$zone_of_interest_length_dp * $spot_size";            // zone of interest, Y direction
+
+min_box_y #calc "($length - $box_length) * 0.5";
+max_box_y #calc "($length + $box_length) * 0.5";
+
+// -- define dimensions for the subproblem
+//~ max_subproblem_xz #calc "$subproblem_frac_xz * $width_depth";
+//~ min_subproblem_y #calc "(1.0 - $subproblem_frac_y) * $length";
+//~ max_subproblem_y #calc "$subproblem_frac_y * $length";
+
+
+actions
+(
+    // MI: simple box - sampling of data for reduced order model
+    {
+        name    zoneOfInterest;
+        type    cellSet;
+        action  remove;
+    }
+    {
+        name    zoneOfInterest;
+        type    cellSet;
+        action  new;
+
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-1.0 $min_box_y -1.0) ($box_width_x $max_box_y $box_width_z);
+        }
+    }
+
+    // MI: simple box - subproblem for the transient solver
+    //~ {
+        //~ name    subproblem;
+        //~ type    cellZoneSet;
+        //~ action  remove;
+    //~ }
+    //~ {
+        //~ name    subproblem;
+        //~ type    cellZoneSet;
+        //~ action  new;
+
+        //~ source  boxToCell;
+        //~ sourceInfo
+        //~ {
+            //~ box (-1.0 $min_subproblem_y -1.0) ($max_subproblem_xz $max_subproblem_y $max_subproblem_xz);
+        //~ }
+    //~ }
+
+);
+
+// ************************************************************************* //

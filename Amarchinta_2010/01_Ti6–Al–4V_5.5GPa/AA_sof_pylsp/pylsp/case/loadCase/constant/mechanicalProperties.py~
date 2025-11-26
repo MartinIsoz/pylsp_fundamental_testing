@@ -1,0 +1,29 @@
+import pylsp
+
+def get(case):
+    material = ''
+    if isinstance(case.lsp.material, pylsp.LinearElasticMaterial):
+        material = 'linearElastic'
+    else:
+        material = 'myLinearElastic'
+
+    return '\
+FoamFile\n\
+{\n\
+    version     2.0;\n\
+    format      ascii;\n\
+    class       dictionary;\n\
+    location    "constant";\n\
+    object      mechanicalProperties;\n\
+}\n\n\
+planeStress no;\n\n\
+mechanical\n\
+(\n\
+    steel{\n\
+        type ' + material + ';\n\
+        rho  rho [1 -3 0 0 0 0 0]  ' + str(case.lsp.material.rho) + ';\n\
+        E    E   [1 -1 -2 0 0 0 0] ' + str(case.lsp.material.E) + ';\n\
+        nu   nu  [0 0 0 0 0 0 0]   ' + str(case.lsp.material.nu) + ';\n\
+        solvePressureEqn no;\n\
+    }\n\
+);'

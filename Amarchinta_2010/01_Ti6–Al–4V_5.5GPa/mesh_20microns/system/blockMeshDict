@@ -1,0 +1,80 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include meshGenerationSettings
+
+cellswidht #calc "round($width * pow($target_cell_size,-1) / 16)";
+cellslength #calc "round($length * pow($target_cell_size,-1) / 16)";
+cellsheight #calc "round($height * pow($target_cell_size,-1) / 16)";
+
+vertx0 #calc "-$width/2";
+vertx1 #calc "$width/2";
+
+verty0 #calc "-$width/2";
+verty1 #calc "$width/2";
+
+vertices             // the calculated values are for R = 0.3 only now!
+(
+    ($vertx0    $verty0       0.)       // 0         
+    ($vertx1    $verty0       0.)       // 1
+    ($vertx1    $verty1       0.)       // 2         
+    ($vertx0    $verty1       0.)       // 3
+
+    ($vertx0    $verty0       $height)  // 4         
+    ($vertx1    $verty0       $height)  // 5
+    ($vertx1    $verty1       $height)  // 6         
+    ($vertx0    $verty1       $height)  // 7
+      
+
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) ($cellswidht $cellslength $cellsheight) simpleGrading (1 1 1)
+);
+
+boundary
+(
+);
+
+faces
+(
+);
+
+patches                             
+(                                    
+    patch bottom                      
+    (
+            (0 3 2 1)
+    )
+
+    patch top                     
+    (
+            (4 5 6 7)
+    )
+    
+    patch sides                     
+    (
+            (0 1 5 4)
+            (0 4 7 3)
+            (3 7 6 2)
+            (2 6 5 1)
+    )
+);
+
+// ************************************************************************* //
+
+

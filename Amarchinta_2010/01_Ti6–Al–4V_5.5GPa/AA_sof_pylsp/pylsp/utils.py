@@ -1,0 +1,83 @@
+#!/usr/bin/python3
+
+def _infoRaw(cols, seps = ['|','|','|','|'], blank=' ', multicolumn=-1):
+    defColSize = 50
+
+    blankPart = ''
+    for i in range(defColSize):
+        blankPart = blankPart + blank
+
+    if multicolumn == 0:
+        cols[0] = cols[0] + blankPart + blankPart + blankPart + blankPart
+        raw = ' ' + seps[0] + blank + cols[0][0:3*defColSize+6] + blank + seps[3]
+    elif multicolumn == 1:
+        cols[0] = cols[0] + blankPart
+        cols[1] = cols[1] + blankPart + blankPart + blankPart
+        raw = ' ' + seps[0] + blank + \
+            cols[0][0:defColSize] + \
+            blank + seps[1] + blank + \
+            cols[1][0:2*defColSize+3] + blank + seps[3]
+    else:
+        cols[0] = cols[0] + blankPart
+        cols[1] = cols[1] + blankPart
+        cols[2] = cols[2] + blankPart
+        raw = ' ' + seps[0] + blank + \
+            cols[0][0:defColSize] + \
+            blank + seps[1] + blank + \
+            cols[1][0:defColSize] + \
+            blank + seps[2] + blank + \
+            cols[2][0:defColSize] + \
+            blank + seps[3]
+
+    print(raw)
+
+def infoRawH2(first, second, newLine=False, bold=False):
+    if bold:
+        _infoRaw(['','',''], blank='X', seps = ['|','|','X','|'])
+    else:
+        _infoRaw(['','',''], blank='-', seps = ['+','+','-','+'])
+
+    _infoRaw([first, second, ''], multicolumn=1)
+
+    if bold:
+        _infoRaw(['','',''], blank='X', seps = ['|','|','X','|'])
+    else:
+        _infoRaw(['','',''], blank='-', seps = ['+','+','-','+'])
+
+    if newLine:
+        print()
+
+def infoRawH3(first, second, third, bold=False, newLine=False):
+    if bold:
+        _infoRaw(['','',''], blank='X')
+    else:
+        _infoRaw(['','',''], blank='-', seps = ['+','+','+','+'])
+
+    _infoRaw([first, second, third])
+
+    if bold:
+        _infoRaw(['','',''], blank='X')
+    else:
+        _infoRaw(['','',''], blank='-', seps = ['+','+','+','+'])
+
+    if newLine:
+        print()
+
+def infoRawC2(first, second):
+    _infoRaw([first, second,''], multicolumn=1)
+
+def infoRawC3(first, second, third):
+    _infoRaw([first, second, third])
+
+def infoRaw3(first, second, third):
+    _infoRaw([first, second,''], multicolumn=1)
+
+def infoLine2(newLine=False):
+    _infoRaw(['','',''], blank='-', seps = ['+','+','-','+'])
+    if newLine:
+        print()
+
+def infoLine3(newLine=False):
+    _infoRaw(['','',''], blank='-', seps = ['+','+','+','+'])
+    if newLine:
+        print()

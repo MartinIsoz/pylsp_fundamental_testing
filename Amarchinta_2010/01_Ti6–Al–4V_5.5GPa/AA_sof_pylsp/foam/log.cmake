@@ -1,0 +1,16 @@
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /home/SOFT/modules/spack/installs/linux-ubuntu22.04-broadwell/gcc-11.4.0/gcc-13.3.0-hbuaefft5p4jgbarv7sjbpihnwjax4gr/bin/gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /home/SOFT/modules/spack/installs/linux-ubuntu22.04-broadwell/gcc-11.4.0/gcc-13.3.0-hbuaefft5p4jgbarv7sjbpihnwjax4gr/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+Building for KRAKEN
+-- Configuring done (5.7s)
+-- Generating done (0.1s)
+-- Build files have been written to: /home/prado/paper/Amarchinta_2010/AA_sof_pylsp/foam/build

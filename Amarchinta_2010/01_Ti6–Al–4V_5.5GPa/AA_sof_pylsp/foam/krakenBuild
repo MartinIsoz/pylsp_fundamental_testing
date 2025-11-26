@@ -1,0 +1,12 @@
+#!/bin/bash
+
+module purge
+rm -rf build
+mkdir build
+ml cmake
+## ml gcc
+ml gcc/13.3.0
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cd build
+make
+#scp -r pgruber@kraken:~/sof_pylsp/foam/build .

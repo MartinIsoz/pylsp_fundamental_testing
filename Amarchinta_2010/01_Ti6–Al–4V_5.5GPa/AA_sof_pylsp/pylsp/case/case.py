@@ -1,0 +1,469 @@
+from os import path, makedirs, listdir, remove, rename, symlink
+from shutil import copy, copyfile, copytree, move, rmtree
+import inspect
+import timeit
+from pylsp import __path__ as pylspDir
+from pylsp.bash import runBashCommand
+from pylsp.foam import runFOAMapp
+from pylsp.utils import infoRawH2, infoRawH3, infoRawC2, infoRawC3, infoLine2, infoLine3
+
+class Case():
+    def __init__(self, solverDir, lsp, case, step=0):
+        sitePackagesDir = path.dirname(pylspDir[0])
+        self._lspfoamDir = path.join(sitePackagesDir, 'lspfoam')
+        infoRawH2(case, 'init')
+        self._solverDir = solverDir
+        self._lsp = lsp
+        self._case = case
+        self._step = step
+        self._writeFields = ['D', 'epsilonP', 'epsilonPf']
+        self._writeFields.extend(self.lsp.writeFields)
+        self._laserBeam = lsp.laserBeams[self._step]
+        self._makeCaseDirs(self._case)
+        infoRawC2('case dir', self._caseDir)
+        infoRawC2('constant dir', self._constantDir)
+        infoRawC2('system dir', self._systemDir)
+        infoRawC2('logs dir', self._logsDir)
+        infoLine2(newLine=True)
+
+    def _initWriteFields(self, fields):
+        self._writeFields = self._lsp.writeFields
+        for field in fields:
+            bWrite = True
+            for existingField in self._writeFields:
+                if existingField == field:
+                    bWrite = False
+                    continue
+            if bWrite:
+                self._writeFields.append(field)
+
+    def _isSubproblem(self):
+        if path.isfile(path.join(self._lsp.meshCase, 'constant', 'polyMesh', 'cellZones')):
+            return True
+        else:
+            return False
+
+    def _manipulateCaseToCase(self, sourceCaseDir, sourceDir, targetCaseDir, targetDir, file='', operation=None):
+        _targetDir = ''
+        if self._isParallel():
+            for procDir in listdir(sourceCaseDir):
+                if procDir.startswith("processor"):
+                    _sourceDir = path.join(sourceCaseDir, procDir, sourceDir, file)
+                    if file == '':
+                        try:
+                            makedirs(path.join(targetCaseDir, procDir))
+                        except:
+                            pass
+                        _targetDir = path.join(targetCaseDir, procDir, targetDir)
+                    else:
+                        try:
+                            makedirs(path.join(targetCaseDir, procDir, targetDir))
+                        except:
+                            pass
+                        _targetDir = path.join(targetCaseDir, procDir, targetDir, file)
+
+                    operation(_sourceDir, _targetDir)
+        else:
+            print('NOT IMPLEMENTED')
+            exit()
+
+    def _manipulateFilesFromCaseToCase(self, sourceCaseDir, sourceDir, targetCaseDir=None, targetDir=None, files=None, operation=None):
+        if self._isParallel():
+            for procDir in listdir(sourceCaseDir):
+                if procDir.startswith("processor"):
+                    _sourceDir = path.join(sourceCaseDir, procDir, sourceDir)
+                    if targetDir is None:
+                        if files is None:
+                            operation(_sourceDir)
+                        else:
+                            for file in files:
+                                sourceFile = path.join(_sourceDir, file)
+                                operation(sourceFile)
+                    else:
+                        _targetDir = path.join(targetCaseDir, procDir, targetDir)
+                        if files is None:
+                            operation(_sourceDir, _targetDir)
+                        else:
+                            try:
+                                makedirs(_targetDir)
+                            except:
+                                pass
+                            for file in files:
+                                sourceFile = path.join(_sourceDir, file)
+                                targetFile = path.join(_targetDir, file)
+                                operation(sourceFile, targetFile)
+        else:
+            _sourceDir = path.join(sourceCaseDir, sourceDir)
+            if targetDir is None:
+                if files is None:
+                    operation(_sourceDir)
+                else:
+                    for file in files:
+                        sourceFile = path.join(_sourceDir, file)
+                        operation(sourceFile)
+            else:
+                _targetDir = path.join(targetCaseDir, targetDir)
+                if files is None:
+                    operation(_sourceDir, _targetDir)
+                else:
+                    try:
+                        makedirs(_targetDir)
+                    except:
+                        pass
+                    for file in files:
+                        sourceFile = path.join(_sourceDir, file)
+                        targetFile = path.join(_targetDir, file)
+                        operation(sourceFile, targetFile)
+
+    def _getTimeDirName(self, caseDir, fTime):
+        if self._isParallel():
+            for dir in listdir(caseDir):
+                if dir.startswith("processor"):
+                    caseDir = path.join(caseDir, dir)
+                    break
+        time = None
+        timeDir = None
+        for subCaseDir in listdir(caseDir):
+            try:
+                time = float(subCaseDir)
+                timeDir = subCaseDir
+            except:
+                continue
+            if time == fTime:
+                return timeDir
+        return None
+
+    def _letOnlyTheseFields(self, caseDir, startTime, endTime, fields=[]):
+        if self._isParallel():
+            for dir in listdir(caseDir):
+                if dir.startswith("processor"):
+                    self._removeCaseFields(path.join(caseDir, dir), startTime, endTime, fields)
+        else:
+            self._removeCaseFields(caseDir, startTime, endTime, fields)
+
+    def _removeCaseFields(self, caseDir, startTime, endTime, fields=[]):
+        for subCaseDir in listdir(caseDir):
+            timeDir = None
+            try:
+                time = float(subCaseDir)
+                timeDir = path.join(caseDir, subCaseDir)
+            except:
+                continue
+            if (time >= startTime) and (time <= endTime):
+                allFields = listdir(timeDir)
+                removeFields = [item for item in allFields if item not in fields]
+                for field in removeFields:
+                    try:
+                        remove(path.join(timeDir, field))
+                    except:
+                        pass
+
+
+    def _isParallel(self):
+        if self._lsp.numberOfProcessors > 1:
+            return True
+        return False
+
+
+    def _copyProcessorDirs(self, oldDir, newDir):
+            for dir in listdir(self._caseDir):
+                if dir.startswith("processor"):
+                    old = path.join(self._caseDir, dir, oldDir)
+                    new = path.join(self._caseDir, dir, newDir)
+                    copytree(old, new)
+
+    def _moveProcessorDirs(self, oldDir, newDir):
+            for dir in listdir(self._caseDir):
+                if dir.startswith("processor"):
+                    old = path.join(self._caseDir, dir, oldDir)
+                    new = path.join(self._caseDir, dir, newDir)
+                    move(old, new)
+
+    def _symlinkProcessorDirs(self, oldDir, newDir):
+            for dir in listdir(self._caseDir):
+                if dir.startswith("processor"):
+                    old = path.join(self._caseDir, dir, oldDir)
+                    new = path.join(self._caseDir, dir, newDir)
+                    symlink(old, new)
+
+    def _copyCaseFileToProcessorDirFiles(self, caseDirName, processorDirName, fileName, caseDir=None):
+        if caseDir is None:
+            caseDir = self._caseDir
+        caseFile = path.join(caseDir, caseDirName, fileName)
+        for dir in listdir(caseDir):
+            if dir.startswith("processor"):
+                try:
+                    makedirs(path.join(caseDir, dir, processorDirName))
+                except:
+                    pass
+                processorFile = path.join(caseDir, dir, processorDirName, fileName)
+                copyfile(caseFile, processorFile)
+
+    def _copyProcessorDirFiles(self, oldDir, newDir, fileName):
+            for dir in listdir(self._caseDir):
+                if dir.startswith("processor"):
+                    old = path.join(self._caseDir, dir, oldDir, fileName)
+                    new = path.join(self._caseDir, dir, newDir, fileName)
+                    try:
+                        makedirs(path.join(self._caseDir, dir, newDir))
+                    except:
+                        pass
+                    copyfile(old, new)
+
+    def _runFoamApp(self, FOAM, app, args='', parallel=False, logSuffix=''):
+        APP = app + ' ' + args
+        CWD = self._caseDir
+        appLogName = app.split('/')[-1]
+        LOG = path.join(self._logsDir, appLogName + '_' + str(self._step) + logSuffix)
+
+        sNumberOfProcessors = '1'
+        if parallel and self._isParallel():
+            noProcDirs = 0
+            for procDir in listdir(CWD):
+                if procDir.startswith("processor"):
+                    noProcDirs = noProcDirs + 1
+            if noProcDirs > 0:
+                sNumberOfProcessors = str(noProcDirs)
+            else:
+                sNumberOfProcessors = str(self._lsp.numberOfProcessors)
+            if self._lsp.system.MPI == 'srun':
+                APP = 'srun -n' + sNumberOfProcessors + ' ' + APP + ' -parallel'
+            else:
+                APP = self._lsp.system.MPI + ' -np ' + sNumberOfProcessors + ' ' + APP + ' -parallel'
+
+
+        infoRawH3(self._case, 'step = ' + str(self._step), 'processors = ' + sNumberOfProcessors)
+        infoRawC2(FOAM, APP)
+
+        execTime = timeit.default_timer()
+        runFOAMapp(FOAM, APP, CWD, LOG)
+        execTime = timeit.default_timer() - execTime
+        minutes = str(int(execTime/60))
+        seconds = str(execTime%60)
+        if len(seconds) > 5:
+            seconds = seconds[0:5]
+
+        infoLine3()
+        infoRawC2('finish', 'execution time = ' + minutes + ' min ' + seconds + ' sec ')
+        infoLine2(newLine=True)
+
+    def _writeParaviewFoamFile(self, defaultName=''):
+        f = open(path.join(self._caseDir, defaultName + self._case + '.foam'), 'w')
+        f.close()
+
+    def _makeCaseDirs(self, case):
+        self._caseDir = path.join(self._solverDir, case)
+        self._constantDir = path.join(self._caseDir, 'constant')
+        self._systemDir = path.join(self._caseDir, 'system')
+        self._logsDir = path.join(self._caseDir, 'logs')
+
+        try:
+            makedirs(self._caseDir)
+        except:
+            pass
+
+        try:
+            makedirs(self._constantDir)
+        except:
+            pass
+
+        try:
+            makedirs(self._systemDir)
+        except:
+            pass
+
+        try:
+            makedirs(self._logsDir)
+        except:
+            pass
+
+
+    def _updateCase(self, startTime, endTime, files):
+        self._startTime = startTime
+        self._endTime = endTime
+
+        try:
+            makedirs(self._constantDir)
+        except:
+            pass
+
+        try:
+            makedirs(self._systemDir)
+        except:
+            pass
+
+        infoRawH3(self._case, 'update case', 'step = ' + str(self._step))
+        infoRawC3('update input files', 'start time = ' + str(self._startTime), 'end time = ' + str(self._endTime))
+        #infoLine3()
+
+        for file in listdir(self._constantDir):
+            try:
+                if file == 'polyMesh':
+                    continue
+                file = path.join(self._constantDir, file)
+                remove(file)
+                file, a = path.split(file)
+                file, b = path.split(file)
+                infoRawC3('remove', b, a)
+            except:
+                continue
+
+        for file in listdir(self._systemDir):
+            try:
+                file = path.join(self._systemDir, file)
+                remove(file)
+                file, a = path.split(file)
+                file, b = path.split(file)
+                #infoRawC3('remove', b, a)
+            except:
+                continue
+
+        for file in files:
+            self._updateInputFile(file)
+        infoLine3(newLine=True)
+
+    def _updateInputFile(self, file):
+        fileString = file.get(self)
+        filePathDoted = inspect.getmodule(file).__name__
+        filePath = filePathDoted.split('.')
+        fileName = filePath[-1]
+
+        filePathDoted = filePathDoted.replace('pylsp.', '')
+        filePathDoted = filePathDoted.replace('.' + fileName, '')
+
+        fileNameWithSuffix = fileName.split('_')
+        fileName = fileNameWithSuffix[0]
+
+        suffix = ''
+        if len(fileNameWithSuffix) > 1:
+            suffix = ' (' + fileNameWithSuffix[1] + ')'
+
+        #infoRawC3('write', filePathDoted, fileName + suffix)
+        filePath = path.join(filePath[-2], fileName)
+        filePath = path.join(self._caseDir, filePath)
+        f = open(filePath, "w")
+        f.write(fileString)
+        f.close()
+
+    def _updateLaserBeam(self):
+        infoRawH2('update laser beam', 'step = ' + str(self._step), newLine=True)
+        self._laserBeam = self._lsp.laserBeams[self._step]
+
+    def _topoSet(self, suffix=''):
+        FOAM = self.lsp.system.foam_com
+        APP  = 'topoSet'
+        ARGS = ''
+        PARA = True
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA, logSuffix=suffix)
+
+    def _decomposePar(self):
+        if not self._isParallel():
+            return
+
+        FOAM = self.lsp.system.foam_com
+        APP  = 'decomposePar'
+        ARGS = ''
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _decomposeParFields(self, time):
+        if not self._isParallel():
+            return
+
+        FOAM = self.lsp.system.foam_com
+        APP  = 'decomposePar'
+        ARGS = '-fields -time ' + time
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _reconstructParMesh(self):
+        if not self._isParallel():
+            return
+
+        FOAM = self.lsp.system.foam_com
+        APP  = 'reconstructParMesh'
+        ARGS = '-constant'
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _reconstructPar(self):
+        if not self._isParallel():
+            return
+
+        FOAM = self.lsp.system.foam_com
+        APP  = 'reconstructPar'
+        ARGS = '-time \'' + str(self._step) + '\' -withZero'
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _changeDictionary(self, suffix=''):
+        FOAM = self.lsp.system.foam_com
+        APP  = 'changeDictionary'
+        ARGS = '-region setSubset -latestTime'
+        PARA = True
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA, logSuffix=suffix)
+
+    def _subsetMesh(self):
+        FOAM = self.lsp.system.foam_com
+        APP  = path.join(self._lspfoamDir, 'subsetMesh')
+        ARGS = 'subproblem'
+        PARA = True
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _createMaps(self, globalSubsetCase, localSubsetCase):
+        FOAM = self.lsp.system.foam_com
+        APP  = path.join(self._lspfoamDir, 'createMaps')
+        ARGS = globalSubsetCase + ' ' + localSubsetCase
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _local2global(self, globalSubsetCase, localSubsetCase):
+        FOAM = self.lsp.system.foam_com
+        APP  = path.join(self._lspfoamDir, 'sub2mesh')
+        if (self.lsp.unstructuredApproach):
+            ARGS = globalSubsetCase + ' ' + localSubsetCase + ' -unstructured'
+        else:
+            ARGS = globalSubsetCase + ' ' + localSubsetCase
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _global2local(self, globalSubsetCase, localSubsetCase):
+        FOAM = self.lsp.system.foam_com
+        APP  = path.join(self._lspfoamDir, 'sub2mesh')
+        if (self.lsp.unstructuredApproach):
+            ARGS = globalSubsetCase + ' ' + localSubsetCase + ' -inverse -unstructured'
+        else:
+            ARGS = globalSubsetCase + ' ' + localSubsetCase + ' -inverse'
+        PARA = False
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    def _patch2cell(self, field, timesRange=[]):
+        FOAM = self.lsp.system.foam_com
+        APP  = path.join(self._lspfoamDir, 'patch2cell')
+        ARGS = field
+        if len(timesRange) == 2:
+            ARGS += ' -time ' + str(timesRange[0]) + ':' + str(timesRange[1])
+
+        PARA = True
+        self._runFoamApp(FOAM, APP, args=ARGS, parallel=PARA)
+
+    @property
+    def lsp(self):
+        return self._lsp
+
+    @property
+    def startTime(self):
+        return self._startTime
+
+    @property
+    def endTime(self):
+        return self._endTime
+
+    @property
+    def caseDir(self):
+        return self._caseDir
+
+    @property
+    def laserBeam(self):
+        return self._laserBeam
+

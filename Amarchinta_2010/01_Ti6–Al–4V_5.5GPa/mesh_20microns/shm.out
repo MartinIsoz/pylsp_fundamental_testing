@@ -1,0 +1,7 @@
+Running blockMesh with command: blockMesh
+Running decomposePar_mesh with command: decomposePar -force
+Running snappyHexMesh with command: srun snappyHexMesh -overwrite -parallel
+Running renumberMesh_po_snappy with command: srun renumberMesh -overwrite -parallel
+Running checkMesh with command: srun checkMesh -constant -parallel
+Running reconstructParMesh with command: reconstructParMesh -constant
+Run done!

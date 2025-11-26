@@ -1,0 +1,63 @@
+from os import mkdir, path, makedirs, remove, rename, terminal_size, symlink, listdir
+from shutil import copytree, copyfile, rmtree, move
+from pylsp.case.case import Case
+import pylsp.case as case
+import pylsp.case.loadCase.system as system
+import pylsp.case.loadCase.constant as constant
+
+class LoadCase(Case):
+    def __init__(self, lspSolverDir, solverDir, lsp, startStep, name):
+        super().__init__(solverDir, lsp, '', step=startStep)
+        self._initWriteFields(['D', 'epsilonP', 'epsilonPf'])
+        self._relaxCaseDir = path.join(lspSolverDir, 'RELAX')
+        self._copyMesh()
+        self._writeParaviewFoamFile(defaultName=name)
+        self._initialize()
+
+    def _initialize(self):
+        self._step = self._step + 1
+        makedirs(path.join(self._caseDir, str(self._step)))
+        copyfile(self.lsp.BCfile, path.join(self._caseDir, str(self._step), 'D'))
+        self._updateCase(self._step, self._step + 1,
+            [
+                case.system.fvSchemes,
+                case.constant.physicsProperties,
+                case.constant.dynamicMeshDict,
+                case.constant.g,
+
+                system.fvSolution,
+                system.controlDict,
+                system.changeDictionaryDict,
+                system.decomposeParDict,
+                constant.solidProperties,
+                constant.mechanicalProperties
+            ])
+
+        if not self._isSubproblem():
+            return
+
+        self._manipulateCaseToCase(self._relaxCaseDir, str(self._step), self._caseDir, str(self._step), file='epsilonP', operation=symlink)
+        self._manipulateCaseToCase(self._relaxCaseDir, str(self._step), self._caseDir, str(self._step), file='epsilonPf', operation=symlink)
+        self._manipulateCaseToCase(self._relaxCaseDir, 'constant', self._caseDir, 'constant', operation=symlink)
+        self._decomposeParFields(str(self._step))
+
+    def _copyMesh(self):
+        meshPolyMesh = path.join(self.lsp.meshCase, 'constant', 'polyMesh')
+        casePolyMesh = path.join(self._constantDir, 'polyMesh')
+        copytree(meshPolyMesh, casePolyMesh)    
+
+    def _preSolve(self):
+        pass
+
+    def solve(self):
+        self._preSolve()
+
+        self._runFoamApp(self.lsp.system.foam_com, path.join(self._lspfoamDir, 'lspfoam'), parallel=True)
+        
+        self._letOnlyTheseFields(self._caseDir, self._step, self._step + 1, fields=self._writeFields)
+        self._postSolve()
+   
+
+    def _postSolve(self):
+        for patchNormalTransfField in self.lsp.patchNormalTransfFields:
+            self._patch2cell(patchNormalTransfField, timesRange=[self._step, self._step + 1])

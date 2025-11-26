@@ -1,0 +1,190 @@
+from os import makedirs, path, remove, rename, listdir, symlink
+from shutil import copyfile, copytree, move, rmtree
+from pylsp.case.case import Case
+import pylsp.case as case
+import pylsp.case.trans.system as system
+import pylsp.case.trans.constant as constant
+
+class Trans(Case):
+    def __init__(self, solverDir, lsp):
+        super().__init__(solverDir, lsp, 'TRANS')
+        self._initWriteFields(['D', 'epsilonP', 'epsilonPf'])
+        self._relaxCaseDir = path.join(self._solverDir, 'RELAX')
+        self._relaxCaseConstantDir = path.join(self._relaxCaseDir, 'constant')
+        self._writeParaviewFoamFile()
+        self._numberOfProcessors = self._lsp.numberOfProcessors
+        self._initialize()
+
+    def _initialize(self):
+        if not self._isSubproblem():
+            self._manipulateFilesFromCaseToCase(self._relaxCaseDir, path.join('constant', 'polyMesh'), self._caseDir, path.join('constant', 'polyMesh'), operation=copytree)
+            self._manipulateFilesFromCaseToCase(self._relaxCaseDir, '0', self._caseDir, '0', files=['D'], operation=copyfile)
+            return
+
+        if not self._isParallel():
+            return
+
+        self._updateCase(self._step, self._step + self._lsp.transientAnalysis.endTime,
+            [
+                case.system.fvSchemes,
+
+                system.fvSolution,
+                system.controlDict,
+                system.decomposeParDict_SCOTCH
+            ])
+        validProc, _ = self._checkMeshOnProcessors()
+        self._reconstructParMesh()
+        self._reconstructPar()
+        data, procMap = self._manualDecomp(validProc)
+        self._writeManualDecomp(data, procMap)
+        transOrigDecompDir = path.join(self._solverDir, 'TRANS_ORIG_DECOMP')
+        makedirs(transOrigDecompDir)
+        for procDir in listdir(self._caseDir):
+            if procDir.startswith("processor"):
+                move(path.join(self._caseDir, procDir), transOrigDecompDir)
+        copytree(path.join(self._caseDir, 'system'), path.join(transOrigDecompDir, 'system'))
+        self._manipulateFilesFromCaseToCase(transOrigDecompDir, '0', operation=rmtree)
+        if self.lsp.unstructuredApproach:
+            self._numberOfProcessors = len(validProc)
+            self._updateCase(self._step, self._step + self._lsp.transientAnalysis.endTime,
+                [
+                    case.system.fvSchemes,
+
+                    system.controlDict,
+                    system.decomposeParDict_MANUAL
+                ])
+        self._decomposePar()
+        self._manipulateFilesFromCaseToCase(self._caseDir, path.join('constant', 'polyMesh'), self._caseDir, path.join('constant', 'polyMesh'), operation=move)
+        self._createMaps(transOrigDecompDir, self._caseDir)
+        rmtree(path.join(self._caseDir, '0'))
+        rmtree(transOrigDecompDir)
+            
+    def _checkMeshOnProcessors(self):
+        validProc = []
+        emptyProc = []
+        if self._isParallel():
+            for procDir in listdir(self._caseDir):
+                if procDir.startswith("processor"):
+                    procNumber = int(procDir.split('processor')[1])
+                    file_points = open(path.join(self._caseDir, procDir, 'constant', 'polyMesh', 'points'), 'r')
+                    pointsData = file_points.readlines()
+                    file_points.close()
+                    noPoints = 0
+                    for line in pointsData:
+                        try:
+                            noPoints = int(line)
+                        except:
+                            pass
+                        if noPoints > 0:
+                            break
+                    if noPoints > 0:
+                        validProc.append(procNumber)
+                    else:
+                        emptyProc.append(procNumber)
+        validProc.sort()
+        emptyProc.sort()
+        return validProc, emptyProc
+
+    def _manualDecomp(self, validProc):
+        noCells = 0
+        cellI = []
+        if self._isParallel():
+            for procNumber in validProc:
+                file_cellProcAddressing = open(path.join(self._caseDir, 'processor' + str(procNumber), 'constant', 'polyMesh', 'cellProcAddressing'), 'r')
+                cellProcAddressingData = file_cellProcAddressing.readlines()
+                file_cellProcAddressing.close()
+                noProcCells = 0
+                lineI = 0
+                for line in cellProcAddressingData:
+                    line = line.split('(')
+                    try:
+                        noProcCells = int(line[0])
+                        if len(line) == 1:
+                            startI = lineI + 2
+                            endI = startI + noProcCells
+                        else:
+                            startI = lineI
+                            endI = -1
+                        break
+                    except:
+                        pass
+                    lineI = lineI + 1
+                cellProcI = []
+                if endI > 0:
+                    for line in range(startI, endI):
+                        cellProcI.append(int(cellProcAddressingData[line]))
+                else:
+                    cellProcAddressingData = cellProcAddressingData[startI].split('(')[1]
+                    cellProcAddressingData = cellProcAddressingData.split(')')[0]
+                    cellProcAddressingData = cellProcAddressingData.split()
+                    for item in cellProcAddressingData:
+                        cellProcI.append(int(item))
+                noCells = noCells + noProcCells
+                cellI.append(cellProcI)
+            data = [0] * noCells
+            newProcNumber = 0
+            procMap = {}
+            for procNumber in validProc:
+                for cell in cellI[newProcNumber]:
+                    data[cell] = newProcNumber
+                procMap[newProcNumber] = procNumber
+                newProcNumber = newProcNumber + 1
+            return data, procMap    
+
+    def _writeManualDecomp(self, data, procMap):
+        file = open(path.join(self._caseDir, '0', 'manualDecompData'), 'w')
+        file.write('FoamFile\n')
+        file.write('{\n')
+        file.write('    version     2.0;\n')
+        file.write('    format      ascii;\n')
+        file.write('    class       labelList;\n')
+        file.write('    location    "0";\n')
+        file.write('    object      a;\n')
+        file.write('}\n\n')
+        file.write(str(len(data)) + '\n')
+        file.write('(\n')
+        for line in data:
+            file.write(str(line) + '\n')
+        file.write(')\n')
+        file.close()
+
+    def _preSolve(self):
+        if self._step > 0:
+            lastTimeDir = self._getTimeDirName(self._caseDir, self._step - 1 + self._lsp.transientAnalysis.endTime)
+            if self._isSubproblem():
+                self._manipulateFilesFromCaseToCase(self._caseDir, lastTimeDir, self._caseDir, str(self._step), files=['D', 'epsilonP', 'epsilonPf'], operation=copyfile)
+                self._copyCaseFileToProcessorDirFiles('system', 'system', 'fvSchemes')
+                #self._copyCaseFileToProcessorDirFiles('system', 'system', 'fvSchemes', caseDir=self._relaxCaseDir)
+                self._global2local(self._relaxCaseDir, self._caseDir)
+            else:
+                self._manipulateFilesFromCaseToCase(self._caseDir, lastTimeDir, self._caseDir, str(self._step), files=['epsilonP', 'epsilonPf'], operation=copyfile)
+                self._manipulateFilesFromCaseToCase(self._relaxCaseDir, str(self._step), self._caseDir, str(self._step), files=['D'], operation=copyfile)
+
+
+        self._updateLaserBeam()
+        self._updateCase(self._step, self._step + self._lsp.transientAnalysis.endTime,
+            [
+                case.system.fvSchemes,
+                case.constant.physicsProperties,
+                case.constant.dynamicMeshDict,
+                case.constant.g,
+
+                system.fvSolution,
+                system.controlDict,
+                system.decomposeParDict_SCOTCH,
+                constant.solidProperties,
+                constant.laserBeamProperties,
+                constant.mechanicalProperties,
+                constant.plasticStrainVsYieldStress,
+            ])
+
+    def solve(self, step):
+        self._step = step
+        self._preSolve()
+        self._runFoamApp(self.lsp.system.foam_com, path.join(self._lspfoamDir, 'lspfoam'), parallel=True)
+        self._letOnlyTheseFields(self._caseDir, self._step, self._step + 1, fields=self._writeFields)
+        self._postSolve()
+
+    def _postSolve(self):
+        for patchNormalTransfField in self.lsp.patchNormalTransfFields:
+            self._patch2cell(patchNormalTransfField, timesRange=[self._step, self._step + 1])

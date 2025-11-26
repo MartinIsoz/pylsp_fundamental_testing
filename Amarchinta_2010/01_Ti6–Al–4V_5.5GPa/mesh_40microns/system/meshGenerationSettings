@@ -1,0 +1,34 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2312                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+target_cell_size 40e-6;                                                //target cell size for final mesh
+
+length  14e-3;
+width   14e-3;
+height  8e-3;
+
+max_refinement_in_snappy 4;
+
+
+// auxiliary settings for topoSet (NOT USED AT THE MOMENT)
+//~ subproblem_frac_xz 0.66667;                                         //subproblem sizing
+//~ subproblem_frac_y 1.0;
+// Note (MI): at the moment, slightly wider than 1st refinement level box
+//            (the refinement level 3 box should be wider than this)
+
+
+
+// ************************************************************************* //

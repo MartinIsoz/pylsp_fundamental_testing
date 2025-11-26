@@ -1,0 +1,36 @@
+def get(case): return '\
+FoamFile\n\
+{\n\
+    version     2.0;\n\
+    format      ascii;\n\
+    class       dictionary;\n\
+    object      fvSchemes;\n\
+}\n\
+d2dt2Schemes\n\
+{\n\
+    default Euler;\n\
+}\n\
+ddtSchemes\n\
+{\n\
+    default Euler;\n\
+}\n\
+gradSchemes\n\
+{\n\
+    ' + case.lsp.fvSchemes.gradSchemes + ';\n\
+}\n\
+divSchemes\n\
+{\n\
+    ' + case.lsp.fvSchemes.divSchemes + ';\n\
+}\n\
+laplacianSchemes\n\
+{\n\
+    ' + case.lsp.fvSchemes.laplacianSchemes + ';\n\
+}\n\
+snGradSchemes\n\
+{\n\
+    ' + case.lsp.fvSchemes.snGradSchemes + ';\n\
+}\n\
+interpolationSchemes\n\
+{\n\
+    ' + case.lsp.fvSchemes.interpolationSchemes + ';\n\
+}'
