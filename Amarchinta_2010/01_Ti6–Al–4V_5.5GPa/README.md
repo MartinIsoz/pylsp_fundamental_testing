@@ -35,7 +35,7 @@ D
 ### ./mesh_40microns/
 
 Folder with prepared mesh of cellSize = 40microns
-    - !!To create new mesh resolutions, copy this folder and rename it as "mesh_XXXmicrons", being XXX the desired mesh size. Then, in ./mesh_XXXmicrons/system/, edit file meshGenerationSettings and set the value of "target_cell_size" variable in meters.
+    - !!To create new mesh resolutions, copy this folder and rename it as "mesh_XXXmicrons", being XXX the desired mesh size. Then, in     ./mesh_40microns/system/, edit file meshGenerationSettings and select the value of "target_cell_size" variable in meters. Lastly, in "run_simulation.py", change "mesh_dir     = "./mesh_40microns/"" to the desired folder with the mesh contained.
 
 ./mesh_40microns/clean_mesh.sh  
 -> cleans the mesh folder
@@ -49,7 +49,7 @@ Folder with prepared mesh of cellSize = 40microns
 ### ./mesh_20microns/
 
 Folder with prepared mesh of cellSize = 20microns
-    - !!To create new mesh resolutions, copy this folder and rename it as "mesh_XXXmicrons", being XXX the desired mesh size. Then, in ./mesh_40microns/system/, edit file meshGenerationSettings and select the value of "target_cell_size" variable in meters.
+    - !!To create new mesh resolutions, copy this folder and rename it as "mesh_XXXmicrons", being XXX the desired mesh size. Then, in     ./mesh_40microns/system/, edit file meshGenerationSettings and select the value of "target_cell_size" variable in meters. Lastly, in "run_simulation.py", change "mesh_dir     = "./mesh_40microns/"" to the desired folder with the mesh contained.
 
 ./mesh_20microns/clean_mesh.sh  
 -> cleans the mesh folder
